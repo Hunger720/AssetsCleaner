@@ -1,5 +1,10 @@
 ﻿// AssetsCleaner.cs
 // 废弃资源的查找和清除
+// 功能
+// 1.找出指定文件夹中所有的prefab
+// 2.找到所有prefab依赖的资源
+// 3.列出所有没用到的资源
+// 4.支持白名单
 
 using System;
 using System.Collections.Generic;
@@ -14,13 +19,18 @@ public class AssetsCleaner
     public static void FindAbandonedAssets()
     {
         // 列出所有prefab
-        string path = Application.dataPath + "/UI/Windows";
+        string path = Application.dataPath; // todo:支持UI操作，打开窗口选择目录
         List<string> dirs = new List<string>();
-        GetDirs(path, ref dirs);
+        int count = GetDirs(path, ref dirs);
+        Debug.Log("查找文件数为:" + count);
     }
 
-    private static void GetDirs(string dirPath, ref List<string> dirs)
+    private static int GetDirs(string dirPath, ref List<string> dirs)
     {
+        Debug.Log("正在查找文件夹:" + dirPath);
+
+        int count = 0;
+        // 遍历当前目录下的文件
         foreach (string path in Directory.GetFiles(dirPath))
         {
             //获取所有文件夹中包含后缀为 .prefab 的路径
@@ -34,14 +44,18 @@ public class AssetsCleaner
                 foreach(string d in dependencies)
                 {
                     Debug.Log(d);
+                    ++count;
                 }
             }
         }
  
+        // 遍历当前目录下的文件夹
         foreach (string path in Directory.GetDirectories(dirPath))
         {
-            GetDirs(path, ref dirs);
+            count += GetDirs(path, ref dirs);
         }
+
+        return count;
     }
 
 }
