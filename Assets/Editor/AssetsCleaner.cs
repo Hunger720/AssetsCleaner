@@ -15,11 +15,19 @@ using UnityEngine;
 
 public class AssetsCleaner
 {
+    [MenuItem("AssetsCleaner/查找文件夹资源")]
+    public static void OpenFolder()
+    {
+        // 列出所有prefab
+        string path = EditorUtility.OpenFolderPanel("Open File Dailog", Application.dataPath, ".prefab");
+        Debug.Log(path);
+    }
+
     [MenuItem("AssetsCleaner/查找所有废弃资源")]
     public static void FindAbandonedAssets()
     {
         // 列出所有prefab
-        string path = Application.dataPath; // todo:支持UI操作，打开窗口选择目录
+        string path = Application.dataPath;
         List<string> dirs = new List<string>();
         int count = GetDirs(path, ref dirs);
         Debug.Log("查找文件数为:" + count);
