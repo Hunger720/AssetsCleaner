@@ -13,57 +13,139 @@ using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 
+public class WhiteListWindow: EditorWindow
+{
+    bool[] _checkList;
+    List<string> _whiteList;
+    
+    Vector2 scrollPos;
+
+    void OnGUI()
+    {
+        using (var v = new EditorGUILayout.VerticalScope())
+        {
+            using (var scrollView = new EditorGUILayout.ScrollViewScope(scrollPos))
+            {
+                scrollPos = scrollView.scrollPosition;
+                for(int i = 0; i < _whiteList.Count; ++i)
+                    _checkList[i] = EditorGUILayout.ToggleLeft(_whiteList[i], _checkList[i]);
+            }
+        }
+    }
+
+    public void SetWhiteList(List<string> whiteList)
+    {
+        _whiteList = whiteList;
+        _checkList = new bool[whiteList.Count];
+        for(int i = 0; i < whiteList.Count; ++i)
+            _checkList[i] = false;
+    }
+}
+
 public class AssetsCleaner
 {
-    [MenuItem("AssetsCleaner/查找文件夹资源")]
-    public static void OpenFolder()
+    [MenuItem("AssetsCleaner/设置文件资源白名单")]
+    public static void SetWhiteList()
     {
-        // 列出所有prefab
-        string path = EditorUtility.OpenFolderPanel("Open File Dailog", Application.dataPath, ".prefab");
-        Debug.Log(path);
+        // 读取本地白名单
+        string path = EditorUtility.OpenFolderPanel("选择文件夹", Application.dataPath, "");
+        if(path == "")
+        {
+            Debug.Log("请选择文件夹");
+            return;
+        }
+        string[] ignoreExtensions = {".meta"};
+        List<string> files = new List<string>();
+        List<string> prefabs = new List<string>();
+        List<string> dependencies = new List<string>();
+        GetAllFiles(path, ref files, ignoreExtensions);
+        Debug.Log("文件夹检查完毕，文件数量为：" + files.Count);
+        CheckDirectory(Application.dataPath, ref prefabs, ref dependencies);
+        Debug.Log("prefab依赖项：" + dependencies.Count);
+        Debug.Log("正在筛选废弃资源...");
+        PickUpAbandonedAssets(ref files, ref dependencies);
+        Debug.Log("筛选完毕，废弃资源数量为：" + files.Count);
+        WhiteListWindow w = (WhiteListWindow)EditorWindow.GetWindow(typeof(WhiteListWindow), false, "白名单设置窗口");
+        w.SetWhiteList(files);
+        w.autoRepaintOnSceneChange = true;
+        w.Show();
+        // 勾选白名单
+        // 更新本地白名单
     }
 
-    [MenuItem("AssetsCleaner/查找所有废弃资源")]
+    [MenuItem("AssetsCleaner/一键查找文件夹废弃资源")]
     public static void FindAbandonedAssets()
     {
-        // 列出所有prefab
-        string path = Application.dataPath;
-        List<string> dirs = new List<string>();
-        int count = GetDirs(path, ref dirs);
-        Debug.Log("查找文件数为:" + count);
+        string path = EditorUtility.OpenFolderPanel("选择文件夹", Application.dataPath, "");
+        if(path == "")
+        {
+            Debug.Log("请选择文件夹");
+            return;
+        }
+        string[] ignoreExtensions = {".meta"};
+        List<string> files = new List<string>();
+        List<string> prefabs = new List<string>();
+        List<string> dependencies = new List<string>();
+        GetAllFiles(path, ref files, ignoreExtensions);
+        Debug.Log("文件夹检查完毕，文件数量为：" + files.Count);
+        CheckDirectory(Application.dataPath, ref prefabs, ref dependencies);
+        Debug.Log("prefab依赖项：" + dependencies.Count);
+        Debug.Log("正在筛选废弃资源...");
+        PickUpAbandonedAssets(ref files, ref dependencies);
+        Debug.Log("筛选完毕，废弃资源数量为：" + files.Count);
     }
 
-    private static int GetDirs(string dirPath, ref List<string> dirs)
+    private static void GetAllFiles(string path, ref List<string> files, string[] ignoreExtensions)
     {
-        Debug.Log("正在查找文件夹:" + dirPath);
-
-        int count = 0;
         // 遍历当前目录下的文件
-        foreach (string path in Directory.GetFiles(dirPath))
+        foreach (string f in Directory.GetFiles(path))
         {
-            //获取所有文件夹中包含后缀为 .prefab 的路径
-            if (System.IO.Path.GetExtension(path) == ".prefab")
-            {
-                string p = path.Substring(path.IndexOf("Assets"));
-                dirs.Add(p);
-                Debug.Log(p);
-
-                string[] dependencies = AssetDatabase.GetDependencies(p);
-                foreach(string d in dependencies)
+            bool ignore = false;
+            foreach(string ext in ignoreExtensions)
+                if(System.IO.Path.GetExtension(f) == ext)
                 {
-                    Debug.Log(d);
-                    ++count;
+                    ignore = true;
+                    break;
                 }
+
+            if(!ignore)
+            {
+                string tf = f.Replace("\\", "/");
+                files.Add(tf.Substring(tf.IndexOf("Assets")));
+            }
+                
+        }
+ 
+        // 遍历当前目录下的文件夹
+        foreach (string d in Directory.GetDirectories(path))
+            GetAllFiles(d, ref files, ignoreExtensions);
+    }
+
+    private static void CheckDirectory(string path, ref List<string> prefabs, ref List<string> dependencies)
+    {
+        // 遍历当前目录下的文件
+        foreach (string file in Directory.GetFiles(path))
+        {
+            // 获取文件夹中包含后缀为 .prefab 的路径
+            if (System.IO.Path.GetExtension(file) == ".prefab")
+            {
+                string p = file.Substring(file.IndexOf("Assets"));
+                prefabs.Add(p);
+
+                string[] ds = AssetDatabase.GetDependencies(p);
+                foreach(string d in ds)
+                    dependencies.Add(d);
             }
         }
  
         // 遍历当前目录下的文件夹
-        foreach (string path in Directory.GetDirectories(dirPath))
-        {
-            count += GetDirs(path, ref dirs);
-        }
-
-        return count;
+        foreach (string p in Directory.GetDirectories(path))
+            CheckDirectory(p, ref prefabs, ref dependencies);
     }
 
+    private static void PickUpAbandonedAssets(ref List<string> files, ref List<string> dependencies)
+    {
+        for(int i = 0; i < dependencies.Count; ++i)
+            files.Remove(dependencies[i]);
+    }
 }
