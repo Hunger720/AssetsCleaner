@@ -13,6 +13,21 @@ using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 
+public class WarningWindow: EditorWindow
+{
+    string _content = "";
+
+    void OnGUI()
+    {
+        GUILayout.Label(_content);
+    }
+
+    public void SetContent(string content)
+    {
+        _content = content;
+    }
+}
+
 public class WhiteListWindow: EditorWindow
 {
     bool[] _checkList;
@@ -31,6 +46,8 @@ public class WhiteListWindow: EditorWindow
                     _checkList[i] = EditorGUILayout.ToggleLeft(_whiteList[i], _checkList[i]);
             }
         }
+
+        GUILayout.Button("确定", GUILayout.Height(50));
     }
 
     public void SetWhiteList(List<string> whiteList)
@@ -44,17 +61,28 @@ public class WhiteListWindow: EditorWindow
 
 public class AssetsCleaner
 {
-    [MenuItem("AssetsCleaner/设置文件资源白名单")]
+    [MenuItem("AssetsCleaner/打开白名单")]
+    public static void OpenWhiteList()
+    {
+        string path = EditorUtility.OpenFolderPanel("打开白名单", Application.dataPath, "");
+        if(path == "")
+        {
+            CreateWarningWindow("警告", "请选择白名单文件");
+            return;
+        }
+    }
+
+    [MenuItem("AssetsCleaner/添加白名单")]
     public static void SetWhiteList()
     {
         // 读取本地白名单
         string path = EditorUtility.OpenFolderPanel("选择文件夹", Application.dataPath, "");
         if(path == "")
         {
-            Debug.Log("请选择文件夹");
+            CreateWarningWindow("警告", "请选择文件夹");
             return;
         }
-        string[] ignoreExtensions = {".meta"};
+        string[] ignoreExtensions = {".meta", ".spriteatlas"};
         List<string> files = new List<string>();
         List<string> prefabs = new List<string>();
         List<string> dependencies = new List<string>();
@@ -73,16 +101,16 @@ public class AssetsCleaner
         // 更新本地白名单
     }
 
-    [MenuItem("AssetsCleaner/一键查找文件夹废弃资源")]
+    [MenuItem("AssetsCleaner/删除废弃资源")]
     public static void FindAbandonedAssets()
     {
         string path = EditorUtility.OpenFolderPanel("选择文件夹", Application.dataPath, "");
         if(path == "")
         {
-            Debug.Log("请选择文件夹");
+            CreateWarningWindow("警告", "请选择文件夹");
             return;
         }
-        string[] ignoreExtensions = {".meta"};
+        string[] ignoreExtensions = {".meta", ".spriteatlas"};
         List<string> files = new List<string>();
         List<string> prefabs = new List<string>();
         List<string> dependencies = new List<string>();
@@ -93,6 +121,14 @@ public class AssetsCleaner
         Debug.Log("正在筛选废弃资源...");
         PickUpAbandonedAssets(ref files, ref dependencies);
         Debug.Log("筛选完毕，废弃资源数量为：" + files.Count);
+    }
+
+    private static void CreateWarningWindow(string title, string content)
+    {
+        Rect rect = new Rect(0, 0, 200, 50);
+        WarningWindow w = (WarningWindow)EditorWindow.GetWindowWithRect(typeof(WarningWindow), rect, false, title);
+        w.SetContent(content);
+        w.Show();
     }
 
     private static void GetAllFiles(string path, ref List<string> files, string[] ignoreExtensions)
